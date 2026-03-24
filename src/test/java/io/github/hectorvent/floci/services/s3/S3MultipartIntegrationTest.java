@@ -178,6 +178,142 @@ class S3MultipartIntegrationTest {
 
     @Test
     @Order(11)
+    void listPartsOfActiveUpload() {
+        // Initiate a new upload for list-parts testing
+        String lpUploadId = given()
+            .when()
+                .post("/" + BUCKET + "/list-parts-test.bin?uploads")
+            .then()
+                .statusCode(200)
+                .extract().xmlPath().getString("InitiateMultipartUploadResult.UploadId");
+
+        // Upload part 1
+        given()
+            .body("PartOneData")
+        .when()
+            .put("/" + BUCKET + "/list-parts-test.bin?uploadId=" + lpUploadId + "&partNumber=1")
+        .then()
+            .statusCode(200);
+
+        // Upload part 2
+        given()
+            .body("PartTwoDataLonger")
+        .when()
+            .put("/" + BUCKET + "/list-parts-test.bin?uploadId=" + lpUploadId + "&partNumber=2")
+        .then()
+            .statusCode(200);
+
+        // List parts
+        given()
+        .when()
+            .get("/" + BUCKET + "/list-parts-test.bin?uploadId=" + lpUploadId)
+        .then()
+            .statusCode(200)
+            .body(containsString("<ListPartsResult"))
+            .body(containsString("<Bucket>" + BUCKET + "</Bucket>"))
+            .body(containsString("<Key>list-parts-test.bin</Key>"))
+            .body(containsString("<UploadId>" + lpUploadId + "</UploadId>"))
+            .body(containsString("<PartNumber>1</PartNumber>"))
+            .body(containsString("<PartNumber>2</PartNumber>"))
+            .body(containsString("<Size>11</Size>"))
+            .body(containsString("<Size>17</Size>"))
+            .body(containsString("<ETag>"))
+            .body(containsString("<IsTruncated>false</IsTruncated>"))
+            .body(containsString("<MaxParts>1000</MaxParts>"));
+
+        // Abort to clean up
+        given().when().delete("/" + BUCKET + "/list-parts-test.bin?uploadId=" + lpUploadId).then().statusCode(204);
+    }
+
+    @Test
+    @Order(12)
+    void listPartsWithPagination() {
+        String lpUploadId = given()
+            .when()
+                .post("/" + BUCKET + "/list-parts-page.bin?uploads")
+            .then()
+                .statusCode(200)
+                .extract().xmlPath().getString("InitiateMultipartUploadResult.UploadId");
+
+        // Upload 3 parts
+        for (int i = 1; i <= 3; i++) {
+            given()
+                .body("data" + i)
+            .when()
+                .put("/" + BUCKET + "/list-parts-page.bin?uploadId=" + lpUploadId + "&partNumber=" + i)
+            .then()
+                .statusCode(200);
+        }
+
+        // List with max-parts=1
+        given()
+        .when()
+            .get("/" + BUCKET + "/list-parts-page.bin?uploadId=" + lpUploadId + "&max-parts=1")
+        .then()
+            .statusCode(200)
+            .body(containsString("<IsTruncated>true</IsTruncated>"))
+            .body(containsString("<MaxParts>1</MaxParts>"))
+            .body(containsString("<NextPartNumberMarker>1</NextPartNumberMarker>"))
+            .body(containsString("<PartNumber>1</PartNumber>"))
+            .body(not(containsString("<PartNumber>2</PartNumber>")));
+
+        // Abort to clean up
+        given().when().delete("/" + BUCKET + "/list-parts-page.bin?uploadId=" + lpUploadId).then().statusCode(204);
+    }
+
+    @Test
+    @Order(13)
+    void listPartsNonExistentUpload() {
+        given()
+        .when()
+            .get("/" + BUCKET + "/" + KEY + "?uploadId=non-existent-upload-id")
+        .then()
+            .statusCode(404)
+            .body(containsString("NoSuchUpload"));
+    }
+
+    @Test
+    @Order(14)
+    void listPartsWithMarker() {
+        String lpUploadId = given()
+            .when()
+                .post("/" + BUCKET + "/list-parts-marker.bin?uploads")
+            .then()
+                .statusCode(200)
+                .extract().xmlPath().getString("InitiateMultipartUploadResult.UploadId");
+
+        // Upload 2 parts
+        given()
+            .body("first")
+        .when()
+            .put("/" + BUCKET + "/list-parts-marker.bin?uploadId=" + lpUploadId + "&partNumber=1")
+        .then()
+            .statusCode(200);
+
+        given()
+            .body("second")
+        .when()
+            .put("/" + BUCKET + "/list-parts-marker.bin?uploadId=" + lpUploadId + "&partNumber=2")
+        .then()
+            .statusCode(200);
+
+        // List with part-number-marker=1, should only return part 2
+        given()
+        .when()
+            .get("/" + BUCKET + "/list-parts-marker.bin?uploadId=" + lpUploadId + "&part-number-marker=1")
+        .then()
+            .statusCode(200)
+            .body(containsString("<PartNumberMarker>1</PartNumberMarker>"))
+            .body(containsString("<PartNumber>2</PartNumber>"))
+            .body(not(containsString("<PartNumber>1</PartNumber>")))
+            .body(containsString("<NextPartNumberMarker>2</NextPartNumberMarker>"));
+
+        // Abort to clean up
+        given().when().delete("/" + BUCKET + "/list-parts-marker.bin?uploadId=" + lpUploadId).then().statusCode(204);
+    }
+
+    @Test
+    @Order(15)
     void cleanUp() {
         given().when().delete("/" + BUCKET + "/" + KEY).then().statusCode(204);
         given().when().delete("/" + BUCKET).then().statusCode(204);

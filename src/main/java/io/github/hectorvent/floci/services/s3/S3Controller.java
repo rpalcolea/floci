@@ -346,11 +346,15 @@ public class S3Controller {
     public Response getObject(@PathParam("bucket") String bucket,
                               @PathParam("key") String key,
                               @QueryParam("versionId") String versionId,
+                              @QueryParam("uploadId") String uploadId,
                               @HeaderParam("x-amz-object-attributes") String objectAttributesHeader,
                               @HeaderParam("x-amz-max-parts") Integer maxParts,
                               @HeaderParam("x-amz-part-number-marker") Integer partNumberMarker,
                               @Context UriInfo uriInfo) {
         try {
+            if (uploadId != null && !hasQueryParam(uriInfo, "attributes")) {
+                return handleListParts(bucket, key, uploadId, uriInfo);
+            }
             if (hasQueryParam(uriInfo, "tagging")) {
                 return handleGetObjectTagging(bucket, key);
             }
@@ -1073,6 +1077,67 @@ public class S3Controller {
                 .end("Error")
                 .build();
         return Response.status(e.getHttpStatus()).entity(xml).type(MediaType.APPLICATION_XML).build();
+    }
+
+    private Response handleListParts(String bucket, String key, String uploadId, UriInfo uriInfo) {
+        String maxPartsStr = uriInfo.getQueryParameters().getFirst("max-parts");
+        String partMarkerStr = uriInfo.getQueryParameters().getFirst("part-number-marker");
+        int maxParts = maxPartsStr != null ? Integer.parseInt(maxPartsStr) : 1000;
+        int partNumberMarker = partMarkerStr != null ? Integer.parseInt(partMarkerStr) : 0;
+
+        MultipartUpload upload = s3Service.getMultipartUpload(bucket, key, uploadId);
+        List<Part> sortedParts = upload.getParts().values().stream()
+                .sorted(java.util.Comparator.comparingInt(Part::getPartNumber))
+                .filter(p -> p.getPartNumber() > partNumberMarker)
+                .toList();
+
+        boolean isTruncated = false;
+        List<Part> resultParts;
+        if (sortedParts.size() > maxParts) {
+            resultParts = sortedParts.subList(0, maxParts);
+            isTruncated = true;
+        } else {
+            resultParts = sortedParts;
+        }
+
+        int nextMarker = resultParts.isEmpty() ? 0 : resultParts.get(resultParts.size() - 1).getPartNumber();
+
+        XmlBuilder xml = new XmlBuilder()
+                .raw("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+                .start("ListPartsResult", AwsNamespaces.S3)
+                .elem("Bucket", bucket)
+                .elem("Key", key)
+                .elem("UploadId", uploadId)
+                .start("Initiator")
+                    .elem("ID", "owner")
+                    .elem("DisplayName", "owner")
+                .end("Initiator")
+                .start("Owner")
+                    .elem("ID", "owner")
+                .end("Owner")
+                .elem("StorageClass", upload.getStorageClass() != null ? upload.getStorageClass() : "STANDARD")
+                .elem("PartNumberMarker", partNumberMarker)
+                .elem("NextPartNumberMarker", nextMarker)
+                .elem("MaxParts", maxParts)
+                .elem("IsTruncated", isTruncated);
+
+        for (Part part : resultParts) {
+            xml.start("Part")
+               .elem("PartNumber", part.getPartNumber())
+               .elem("LastModified", ISO_FORMAT.format(part.getLastModified()))
+               .elem("ETag", part.getETag())
+               .elem("Size", part.getSize());
+            if (part.getChecksum() != null && part.getChecksum().getChecksumSHA256() != null) {
+                xml.elem("ChecksumSHA256", part.getChecksum().getChecksumSHA256());
+            }
+            if (part.getChecksum() != null && part.getChecksum().getChecksumSHA1() != null) {
+                xml.elem("ChecksumSHA1", part.getChecksum().getChecksumSHA1());
+            }
+            xml.end("Part");
+        }
+
+        xml.end("ListPartsResult");
+        return Response.ok(xml.build()).type(MediaType.APPLICATION_XML).build();
     }
 
     private boolean hasQueryParam(UriInfo uriInfo, String param) {

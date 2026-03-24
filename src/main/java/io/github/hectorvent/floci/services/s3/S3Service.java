@@ -840,6 +840,16 @@ public class S3Service {
                 .toList();
     }
 
+    public MultipartUpload getMultipartUpload(String bucket, String key, String uploadId) {
+        ensureBucketExists(bucket);
+        MultipartUpload upload = multipartUploads.get(uploadId);
+        if (upload == null || !upload.getBucket().equals(bucket) || !upload.getKey().equals(key)) {
+            throw new AwsException("NoSuchUpload",
+                    "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.", 404);
+        }
+        return upload;
+    }
+
     // --- Notification Configuration ---
 
     public void putBucketNotificationConfiguration(String bucketName, NotificationConfiguration config) {
