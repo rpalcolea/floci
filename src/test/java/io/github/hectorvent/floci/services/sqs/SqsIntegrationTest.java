@@ -205,6 +205,33 @@ class SqsIntegrationTest {
     }
 
     @Test
+    @Order(11)
+    void sendMessageViaJsonQueuePath() {
+        // First, create a queue for this test
+        String url = given()
+            .contentType("application/x-www-form-urlencoded")
+            .formParam("Action", "CreateQueue")
+            .formParam("QueueName", "json-routing-test-queue")
+        .when()
+            .post("/")
+        .then()
+            .statusCode(200)
+            .extract().xmlPath().getString("CreateQueueResponse.CreateQueueResult.QueueUrl");
+
+        // Send a message via POST /{accountId}/{queueName} with JSON 1.0 protocol
+        given()
+            .contentType("application/x-amz-json-1.0")
+            .header("X-Amz-Target", "AmazonSQS.SendMessage")
+            .body("{\"QueueUrl\":\"" + url + "\",\"MessageBody\":\"Hello via JSON 1.0 queue path\"}")
+        .when()
+            .post("/000000000000/json-routing-test-queue")
+        .then()
+            .statusCode(200)
+            .body("MessageId", notNullValue())
+            .body("MD5OfMessageBody", notNullValue());
+    }
+
+    @Test
     void unsupportedAction() {
         given()
             .contentType("application/x-www-form-urlencoded")

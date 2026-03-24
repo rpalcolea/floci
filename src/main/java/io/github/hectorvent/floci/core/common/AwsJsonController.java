@@ -71,6 +71,41 @@ public class AwsJsonController {
     }
 
     @POST
+    @Path("/{accountId:\\d+}/{queueName:.+}")
+    @Consumes("application/x-amz-json-1.0")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response handleQueueJsonRequest(
+            @PathParam("accountId") String accountId,
+            @PathParam("queueName") String queueName,
+            @HeaderParam("X-Amz-Target") String target,
+            @Context HttpHeaders httpHeaders,
+            String body) {
+
+        if (target != null && target.startsWith(SQS_TARGET_PREFIX)) {
+            String action = target.substring(SQS_TARGET_PREFIX.length());
+            LOG.debugv("SQS JSON action (queue path): {0}", action);
+            try {
+                JsonNode request = objectMapper.readTree(body);
+                String region = regionResolver.resolveRegion(httpHeaders);
+                return sqsJsonHandler.handle(action, request, region);
+            } catch (AwsException e) {
+                return Response.status(e.getHttpStatus())
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(new AwsErrorResponse(e.getErrorCode(), e.getMessage()))
+                        .build();
+            } catch (Exception e) {
+                LOG.error("Error processing SQS JSON request", e);
+                return Response.status(500)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(new AwsErrorResponse("InternalServerError", e.getMessage()))
+                        .build();
+            }
+        }
+
+        return null; // Let other handlers (S3) deal with it
+    }
+
+    @POST
     @Consumes("application/x-amz-json-1.0")
     @Produces(MediaType.APPLICATION_JSON)
     public Response handleJsonRequest(
