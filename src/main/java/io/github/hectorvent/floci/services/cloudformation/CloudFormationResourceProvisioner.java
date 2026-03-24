@@ -231,7 +231,25 @@ public class CloudFormationResourceProvisioner {
         req.put("Handler", props != null && props.has("Handler") ? engine.resolve(props.get("Handler")) : "index.handler");
         req.put("Role", props != null && props.has("Role") ? engine.resolve(props.get("Role")) : "arn:aws:iam::" + accountId + ":role/default");
         if (props != null && props.has("Code")) {
-            req.put("Code", Map.of("ZipFile", "exports.handler=async(e)=>({statusCode:200})"));
+            JsonNode codeNode = props.get("Code");
+            Map<String, String> codeMap = new java.util.HashMap<>();
+
+            String s3Bucket = codeNode.has("S3Bucket") ? engine.resolve(codeNode.get("S3Bucket")) : null;
+            String s3Key = codeNode.has("S3Key") ? engine.resolve(codeNode.get("S3Key")) : null;
+            String zipFile = codeNode.has("ZipFile") ? engine.resolve(codeNode.get("ZipFile")) : null;
+
+            if (s3Bucket != null && s3Key != null) {
+                codeMap.put("S3Bucket", s3Bucket);
+                codeMap.put("S3Key", s3Key);
+                if (codeNode.has("S3ObjectVersion")) {
+                    codeMap.put("S3ObjectVersion", engine.resolve(codeNode.get("S3ObjectVersion")));
+                }
+            } else if (zipFile != null) {
+                codeMap.put("ZipFile", zipFile);
+            } else {
+                codeMap.put("ZipFile", "exports.handler=async(e)=>({statusCode:200})");
+            }
+            req.put("Code", codeMap);
         } else {
             req.put("Code", Map.of("ZipFile", "exports.handler=async(e)=>({statusCode:200})"));
         }

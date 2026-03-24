@@ -26,6 +26,9 @@ public class LambdaFunction {
     private String packageType = "Zip";
     private String imageUri;
     private String codeLocalPath;
+    private String codeS3Bucket;
+    private String codeS3Key;
+    private String codeS3ObjectVersion;
     private Map<String, String> environment = new HashMap<>();
     private Map<String, String> tags = new HashMap<>();
     private long lastModified;
@@ -82,6 +85,15 @@ public class LambdaFunction {
 
     public String getCodeLocalPath() { return codeLocalPath; }
     public void setCodeLocalPath(String codeLocalPath) { this.codeLocalPath = codeLocalPath; }
+
+    public String getCodeS3Bucket() { return codeS3Bucket; }
+    public void setCodeS3Bucket(String codeS3Bucket) { this.codeS3Bucket = codeS3Bucket; }
+
+    public String getCodeS3Key() { return codeS3Key; }
+    public void setCodeS3Key(String codeS3Key) { this.codeS3Key = codeS3Key; }
+
+    public String getCodeS3ObjectVersion() { return codeS3ObjectVersion; }
+    public void setCodeS3ObjectVersion(String codeS3ObjectVersion) { this.codeS3ObjectVersion = codeS3ObjectVersion; }
 
     public Map<String, String> getEnvironment() { return environment; }
     public void setEnvironment(Map<String, String> environment) { this.environment = environment; }

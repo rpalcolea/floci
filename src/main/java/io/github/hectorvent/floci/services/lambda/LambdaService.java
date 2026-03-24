@@ -167,9 +167,22 @@ public class LambdaService {
             if (imageUri != null) {
                 fn.setImageUri(imageUri);
             }
-            String zipFileBase64 = (String) code.get("ZipFile");
-            if (zipFileBase64 != null) {
-                extractZipCode(fn, zipFileBase64);
+            String s3Bucket = (String) code.get("S3Bucket");
+            String s3Key = (String) code.get("S3Key");
+            if (s3Bucket != null && s3Key != null) {
+                // S3-referenced code: store the reference without base64 decoding
+                fn.setCodeS3Bucket(s3Bucket);
+                fn.setCodeS3Key(s3Key);
+                String s3ObjectVersion = (String) code.get("S3ObjectVersion");
+                if (s3ObjectVersion != null) {
+                    fn.setCodeS3ObjectVersion(s3ObjectVersion);
+                }
+                LOG.infov("Lambda {0} uses S3 code reference: s3://{1}/{2}", functionName, s3Bucket, s3Key);
+            } else {
+                String zipFileBase64 = (String) code.get("ZipFile");
+                if (zipFileBase64 != null) {
+                    extractZipCode(fn, zipFileBase64);
+                }
             }
         }
 
